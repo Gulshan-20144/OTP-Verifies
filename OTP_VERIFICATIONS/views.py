@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from .serializers import Ragistrationserializers,loginserializers
+from .serializers import Ragistrationserializers,LoginSerializer,ChangePasswordSerializer,SendLinkSerializers,ResetPasswordSerializers
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
@@ -17,13 +17,14 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 logger=logging.getLogger("get_Company")
 
 class Userragistration(APIView):
+   permissions_classes=[AllowAny]
    serializers_class=Ragistrationserializers
    def post(self,request):
       try:
          logger.info(
             f"Enetr log: Requesting {request.build_absolute_uri()}\n\n additionalInfo:\n\n {request.data}\n\n,",exc_info=True)
          serializers=self.serializers_class(data=request.data)
-         if serializers.is_valid():
+         if serializers.is_valid(raise_exception=True):
             serializers.save()
             send_otp_via_email(serializers.data["email"])
             status_code=status.CREATED
@@ -42,13 +43,13 @@ class Userragistration(APIView):
                   "Error":{"Username":"Username is already exists"}
                 }
          elif serializers.errors:
-                status_code=status.INTERNAL_SERVER_ERROR
-                response={
+               status_code=status.INTERNAL_SERVER_ERROR
+               response={
                   "success":False,
                   "status_code":status_code,
                   "massage":"Internal Error",
-                  "Error":str(serializers.errors)
-                }
+                  "error":serializers.errors
+               }
          logger.info(
             f"Enetr log: Requesting {request.build_absolute_uri()}\n\n additionalInfo:\n\n {response}\n\n,",exc_info=True)
          # if serializers.errors:
@@ -65,54 +66,68 @@ class Userragistration(APIView):
             f"Enetr log: Requesting {request.build_absolute_uri()}\n\n additionalInfo:\n\n {response}\n\n,",exc_info=True)
       return Response(response,status=status_code)
    
+
 class Userlogin(APIView):
    permission_classes = [AllowAny]
-   def post(self,request):
+
+   def post(self, request):
+      # impor
+      # response = {}  # Initialize response with a default value
+
       logger.info(
          f"Log Enter:Requesting {request.build_absolute_uri()}\n\n additionalInfo\n\n{request.data}"
       )
+      
       try:
-         username=request.data.get("username")
-         email1=request.data.get("email")
-         data= User.objects.filter(username=username).first()
-         email=data.email
+         username = request.data.get("username")
+         email1 = request.data.get("email")
+         data = User.objects.filter(username=username).first()
+         if data is None:
+            raise Exception("Please Enter Correct Username")
+         email = data.email
+         
          if email == email1:
             if data.verified == True:
-               serializers=loginserializers(data=request.data)
+               serializers = LoginSerializer(data=request.data)
                if serializers.is_valid():
-                  user=serializers.validated_data['user']
+                  user = serializers.validated_data['user']
                   refresh = RefreshToken.for_user(user)
-                  status_code=status.CREATED
-                  response={
-                     "success":True,
-                     "status_code":status_code,
-                     "massege":"Token Created Successfully",
-                     "refresh":str(refresh),
-                     "Token":str(refresh.access_token)
+                  status_code = status.OK
+                  response = {
+                     "success": True,
+                     "status_code": status_code,
+                     "message": "Token Created Successfully",
+                     "refresh": str(refresh),
+                     "Token": str(refresh.access_token)
                   }
+               else:
+                  raise Exception(serializers.errors)
             else:
-               raise Exception("Please verified this user via OTP") 
+               raise Exception("Please verify this user via OTP") 
          else:
             raise Exception("Please Enter Correct Email")  
+         
          logger.info(
-         f"Log Enter:Requesting {request.build_absolute_uri()}\n\n additionalInfo\n\n{response}"
-      )
+            f"Log Enter:Requesting {request.build_absolute_uri()}\n\n additionalInfo\n\n{response}"
+         )
+      
       except Exception as e:
-         status_code=status.OK
-         response={
-            "success":False,
-            "status_code":status.BAD_REQUEST,
-            "massege":"Somthing went wrong",
-            "Error":str(e)
+         status_code = status.BAD_REQUEST
+         response = {
+            "success": False,
+            "status_code": status_code,
+            "message": "Something went wrong",
+            "error": str(e)
          }
          logger.error(
-         f"Log Enter:Requesting {request.build_absolute_uri()}\n\n additionalInfo\n\n{response}"
+            f"Log Enter:Requesting {request.build_absolute_uri()}\n\n additionalInfo\n\n{response}"
          )
-      return Response(response,status=status_code)
+      
+      return Response(response, status=status_code)
   
 class Userdetails(generics.GenericAPIView):
     permission_classes=[IsAuthenticated]
-    # authentication_classes=[JWTAuthentication]
+    authentication_classes=[JWTAuthentication]
     def get(self, request, *args, **kwargs):
         
         logger.info(
@@ -264,3 +279,99 @@ class ResendOtp(APIView):
       return Response(response,status=status_code)
    
 # class ChangePassword
+class ChangePassword(APIView):
+   permission_classes=[IsAuthenticated]
+   
+   def post(self,request):
+      try:
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{request.data}\n\n"
+         )
+         serializers=ChangePasswordSerializer(data=request.data,context={"user":request.user})
+         print(serializers)
+         if serializers.is_valid(raise_exception=True):
+            
+            status_code=status.OK
+            response={
+               "Success":True,
+               "status_code":status_code,
+               "massege":"Password Change Successfully"
+            } 
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{response}\n\n"
+         )
+      except Exception as e:
+         status_code=status.BAD_REQUEST
+         response={
+               "Success":False,
+               "status_code":status_code,
+               "massege":"Somthing Went Wrong",
+               "Error":str(e)
+            }
+         logger.error(
+            f"Log Enter: Requesting {request.build_absolute_uri()}\n\n AdditionalInfo {response}\n\n"
+         )
+      return Response(response,status=status_code)
+   
+class SendResetPasswordlinkView(APIView):
+   permission_classes=[AllowAny]
+   def post(self,request):
+      try:
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{request.data}\n\n"
+         )
+         serializers=SendLinkSerializers(data=request.data)
+         if serializers.is_valid():
+            status_code=status.BAD_REQUEST
+            response={
+            "success":True,
+            "status_code":status_code,
+            "massege":"Reset Link On Your Mail Please Check Your MailBox",
+            }
+         else:
+            raise Exception(serializers.errors)
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{response}\n\n"
+         )
+      except Exception as e:
+         status_code=status.BAD_REQUEST
+         response={
+            "success":False,
+            "status_code":status_code,
+            "massege":"Somthing Went Wrong",
+            "error":str(e)
+         }
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{response}\n\n"
+         )
+      return Response(response,status=status_code)
+   
+class UserPasswordResetView(APIView):
+   def post(self,request,uid,token,format=None):
+      try:
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{request.data}\n\n"
+         )
+         
+         serializers=ResetPasswordSerializers(data=request.data,context={"uid":uid,'token':token})
+         if serializers.is_valid():
+            status_code=status.OK
+            response={
+            "success":True,
+            "status_code":status_code,
+            "massege":"Password Reset Successfully",
+            }
+         else:
+            raise Exception(serializers.errors)
+      except Exception as e:
+         status_code=status.BAD_REQUEST
+         response={
+            "success":False,
+            "status_code":status_code,
+            "massege":"Somthing Went Wrong",
+            "error":str(e)
+         }
+         logger.info(
+            f"Log Enter:Requesting{request.build_absolute_uri()}\n\n AdditionalInfo{response}\n\n"
+         )
+      return Response(response,status=status_code)

@@ -1,7 +1,8 @@
-from django.core.mail import send_mail
+from django.core.mail import send_mail,EmailMessage
 from django.utils.crypto import get_random_string
 import random  # Consider removing this import if not used elsewhere
 from django.conf import settings
+import os
 from .models import User
 
 def send_otp_via_email(email):
@@ -16,3 +17,12 @@ def send_otp_via_email(email):
     # print(user_obj)
     user_obj.otp = otp
     user_obj.save()
+
+def send_email(data):
+    eamil=EmailMessage(
+        subject=data["email_subject"],
+        body=data['body'],
+        from_email=os.environ.get("EMAIL_FROM"),
+        to=[data['to_email']]
+    )
+    eamil.send()
